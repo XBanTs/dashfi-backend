@@ -25,7 +25,7 @@ app.use(express.urlencoded({ extended: false }))
 // CORS Configuration for production
 const corsOptions = {
   origin: process.env.NODE_ENV === 'production' 
-    ? [process.env.FRONTEND_URL || 'https://your-vercel-app.vercel.app'] // Replace with your actual Vercel URL
+    ? [process.env.FRONTEND_URL || 'https://dashfi-frontend.vercel.app/'] // Replace with your actual Vercel URL
     : ['http://localhost:5173', 'http://localhost:3000'],
   credentials: true,
   optionsSuccessStatus: 200
