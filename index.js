@@ -21,23 +21,49 @@ app.use(helmet.crossOriginResourcePolicy({ policy: "cross-origin" }));
 app.use(morgan("common"));
 
 /* ---------- CORS (production-safe) ---------- */
-const allowedOrigins = [
-  // ✅ set in Render env, no trailing slash
-  process.env.FRONTEND_URL || "https://dashfi-frontend.vercel.app",
-  // allow local dev (harmless in prod)
+const allowedExactOrigins = [
+  // Primary frontend URL (set this in Render env). No trailing slash.
+  process.env.FRONTEND_URL,
+  // Optionally allow a few more explicit origins via env
+  process.env.FRONTEND_URL_2,
+  process.env.FRONTEND_URL_3,
+  // Local dev
   "http://localhost:5173",
   "http://localhost:3000",
-  "http://localhost:9000", // optional for testing local backend calls
-];
+  "http://localhost:9000",
+  "http://localhost:1337",
+].filter(Boolean);
 
 // normalize helper
 const normalize = (o) => (o ? o.replace(/\/$/, "") : o);
 
+// allow any Vercel preview/prod subdomain for this project
+const isVercelPreview = (o) => {
+  try {
+    const hostname = new URL(o).hostname;
+    return hostname.endsWith(".vercel.app");
+  } catch {
+    return false;
+  }
+};
+
+// allow additional origins via comma-separated env
+const extraCors = (process.env.EXTRA_CORS_ORIGINS || "")
+  .split(",")
+  .map((s) => s.trim())
+  .filter(Boolean);
+
 const corsOptions = {
   origin: (origin, callback) => {
     if (!origin) return callback(null, true); // Postman/cURL/server-to-server
-    const ok = allowedOrigins.map(normalize).includes(normalize(origin));
-    if (ok) return callback(null, true);
+    const orig = normalize(origin);
+    const okExact =
+      allowedExactOrigins.map(normalize).includes(orig) ||
+      extraCors.map(normalize).includes(orig);
+
+    if (okExact || isVercelPreview(orig)) {
+      return callback(null, true);
+    }
     console.warn(`❌ CORS blocked origin: ${origin}`);
     return callback(new Error("Not allowed by CORS"));
   },
@@ -48,7 +74,8 @@ const corsOptions = {
 };
 
 app.use(cors(corsOptions));
-app.options("*", cors(corsOptions)); // preflight for all routes
+// CORS middleware automatically handles preflight requests (OPTIONS)
+// No need for explicit app.options() with Express 5
 
 /* ---------- Healthcheck (nice for debugging) ---------- */
 app.get("/", (_req, res) => {
