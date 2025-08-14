@@ -27,6 +27,7 @@ const allowedOrigins = [
   // allow local dev (harmless in prod)
   "http://localhost:5173",
   "http://localhost:3000",
+  "http://localhost:9000", // optional for testing local backend calls
 ];
 
 // normalize helper
