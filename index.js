@@ -2,7 +2,7 @@ import express from "express";
 import mongoose from "mongoose";
 import cors from "cors";
 import dotenv from "dotenv";
-import helmet, { crossOriginResourcePolicy } from "helmet";
+import helmet from "helmet";
 import morgan from "morgan";
 
 // Routes
@@ -10,72 +10,82 @@ import kpiRoutes from "./routes/kpi.js";
 import productRoutes from "./routes/product.js";
 import transactionRoutes from "./routes/transaction.js";
 
-// Models & Sample Data (optional seeding)
-import KPI from "./models/KPI.js";
-import Product from "./models/Product.js";
-import Transaction from "./models/Transaction.js";
-import { kpis, products, transactions } from "./data/data.js";
-
-// CONFIG
 dotenv.config();
 const app = express();
 
-// Middleware
+/* ---------- Core middleware ---------- */
 app.use(express.json());
-app.use(helmet());
-app.use(crossOriginResourcePolicy({ policy: "cross-origin" }));
-app.use(morgan("common"));
 app.use(express.urlencoded({ extended: false }));
+app.use(helmet());
+app.use(helmet.crossOriginResourcePolicy({ policy: "cross-origin" }));
+app.use(morgan("common"));
 
-/* ===== CORS CONFIGURATION ===== */
+/* ---------- CORS (production-safe) ---------- */
 const allowedOrigins = [
-  process.env.FRONTEND_URL || "https://dashfi-frontend.vercel.app", // Production
-  "http://localhost:5173", // Local dev (Vite)
-  "http://localhost:3000"  // Local dev (CRA)
+  // ✅ set in Render env, no trailing slash
+  process.env.FRONTEND_URL || "https://dashfi-frontend.vercel.app",
+  // allow local dev (harmless in prod)
+  "http://localhost:5173",
+  "http://localhost:3000",
 ];
+
+// normalize helper
+const normalize = (o) => (o ? o.replace(/\/$/, "") : o);
 
 const corsOptions = {
   origin: (origin, callback) => {
-    // Allow requests with no origin (like Postman or server-to-server)
-    if (!origin) return callback(null, true);
-
-    if (allowedOrigins.includes(origin)) {
-      return callback(null, true);
-    }
-    console.warn(`❌ CORS blocked request from: ${origin}`);
+    if (!origin) return callback(null, true); // Postman/cURL/server-to-server
+    const ok = allowedOrigins.map(normalize).includes(normalize(origin));
+    if (ok) return callback(null, true);
+    console.warn(`❌ CORS blocked origin: ${origin}`);
     return callback(new Error("Not allowed by CORS"));
   },
   credentials: true,
+  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+  allowedHeaders: ["Content-Type", "Authorization"],
   optionsSuccessStatus: 200,
 };
 
 app.use(cors(corsOptions));
-app.options("*", cors(corsOptions)); // Handle preflight
-/* ===== END CORS CONFIGURATION ===== */
+app.options("*", cors(corsOptions)); // preflight for all routes
 
-// ROUTES
-app.get("/", (req, res) => {
-  res.status(200).json({ status: "Backend is running" });
+/* ---------- Healthcheck (nice for debugging) ---------- */
+app.get("/", (_req, res) => {
+  res.status(200).json({ status: "ok", service: "dashfi-backend" });
 });
-app.use("/kpi", kpiRoutes);
-app.use("/products", productRoutes);
-app.use("/transaction", transactionRoutes);
+app.get("/health", (_req, res) => {
+  res.status(200).send("OK");
+});
 
-// DATABASE CONNECTION
+/* ---------- API routes ---------- */
+app.use("/kpi", kpiRoutes);             // GET /kpi/kpis
+app.use("/products", productRoutes);    // GET /products/products
+app.use("/transaction", transactionRoutes); // GET /transaction/transactions
+
+/* ---------- DB + Server ---------- */
+// On Render, DO NOT hardcode a port. Use process.env.PORT.
+// Render will set PORT dynamically (you saw 10000 in logs).
 const PORT = process.env.PORT || 9000;
 
 mongoose
   .connect(process.env.MONGO_URL, {
+    // these options are harmless with newer drivers; fine to keep/remove
     useNewUrlParser: true,
     useUnifiedTopology: true,
   })
-  .then(async () => {
-    app.listen(PORT, () => console.log(`✅ Server running on port: ${PORT}`));
+  .then(() => {
+    app.listen(PORT, () => {
+      console.log(`✅ Server running on port: ${PORT}`);
+    });
+  })
+  .catch((err) => {
+    console.error("❌ Database connection failed:", err);
+    process.exit(1);
+  });
 
-    // Seed data if needed (run once)
+
+ // Optional: seed data (uncomment once if needed)
     // await mongoose.connection.db.dropDatabase();
     // await KPI.insertMany(kpis);
     // await Product.insertMany(products);
     // await Transaction.insertMany(transactions);
-  })
-  .catch((error) => console.error(`❌ Database connection failed: ${error}`));
