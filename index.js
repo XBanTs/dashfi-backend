@@ -10,7 +10,7 @@ import kpiRoutes from "./routes/kpi.js";
 import productRoutes from "./routes/product.js";
 import transactionRoutes from "./routes/transaction.js";
 
-// Models & Sample Data (remove insert if not needed)
+// Models & Sample Data (optional seeding)
 import KPI from "./models/KPI.js";
 import Product from "./models/Product.js";
 import Transaction from "./models/Transaction.js";
@@ -29,32 +29,34 @@ app.use(express.urlencoded({ extended: false }));
 
 /* ===== CORS CONFIGURATION ===== */
 const allowedOrigins = [
-  process.env.FRONTEND_URL || "https://dashfi-frontend.vercel.app", // Production frontend
+  process.env.FRONTEND_URL || "https://dashfi-frontend.vercel.app", // Production
   "http://localhost:5173", // Local dev (Vite)
-  "http://localhost:3000"  // Local dev (React CRA)
+  "http://localhost:3000"  // Local dev (CRA)
 ];
 
 const corsOptions = {
-  origin: function (origin, callback) {
-    // Allow requests with no origin (Postman, curl, etc.)
+  origin: (origin, callback) => {
+    // Allow requests with no origin (like Postman or server-to-server)
     if (!origin) return callback(null, true);
 
     if (allowedOrigins.includes(origin)) {
       return callback(null, true);
-    } else {
-      return callback(new Error("Not allowed by CORS"));
     }
+    console.warn(`❌ CORS blocked request from: ${origin}`);
+    return callback(new Error("Not allowed by CORS"));
   },
   credentials: true,
-  optionsSuccessStatus: 200
+  optionsSuccessStatus: 200,
 };
 
-// Apply CORS to all routes
 app.use(cors(corsOptions));
-app.options("*", cors(corsOptions)); // Handle preflight requests
+app.options("*", cors(corsOptions)); // Handle preflight
 /* ===== END CORS CONFIGURATION ===== */
 
 // ROUTES
+app.get("/", (req, res) => {
+  res.status(200).json({ status: "Backend is running" });
+});
 app.use("/kpi", kpiRoutes);
 app.use("/products", productRoutes);
 app.use("/transaction", transactionRoutes);
@@ -70,10 +72,10 @@ mongoose
   .then(async () => {
     app.listen(PORT, () => console.log(`✅ Server running on port: ${PORT}`));
 
-    /* Seed Data (run once if needed) */
+    // Seed data if needed (run once)
     // await mongoose.connection.db.dropDatabase();
     // await KPI.insertMany(kpis);
     // await Product.insertMany(products);
     // await Transaction.insertMany(transactions);
   })
-  .catch((error) => console.error(`${error} ❌ Database connection failed`));
+  .catch((error) => console.error(`❌ Database connection failed: ${error}`));
